@@ -101,3 +101,21 @@ drop n = go n
             case v of
                 Nothing -> return ()
                 Just _ -> go (x-1)
+
+dropWhile :: Monad m => (i -> Bool) -> ConduitT i o m ()
+dropWhile g = go
+    where
+        go = do
+            v <- await
+            case v of
+                Nothing -> return ()
+                Just a -> if g a then go else leftover a
+
+foldl :: Monad m => (r -> i -> r) -> r -> ConduitT i o m r
+foldl g acc = go acc
+    where
+        go res = do
+            v <- await
+            case v of
+                Nothing -> return res
+                Just vv -> go (g res vv)

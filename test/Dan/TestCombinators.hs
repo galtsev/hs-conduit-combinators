@@ -130,3 +130,20 @@ tests = hspec $ do
                 pipe = CC.yieldMany [1..n] .| (DC.drop d >> sinkList)
             in
                 runConduitPure pipe `shouldBe` [d+1..n]
+
+        it "dropWhile" $
+            let
+                n = 28
+                d = 11
+                pipe :: ConduitT () Void Identity [Int]
+                pipe = CC.yieldMany [1..n] .| (DC.dropWhile (<d) >> sinkList)
+            in
+                runConduitPure pipe `shouldBe` [d..n]
+
+        it "foldl" $
+            let
+                lst = [3..17]
+                pipe :: ConduitT () Void Identity Int
+                pipe = CC.yieldMany lst .| DC.foldl (+) 7
+            in
+                runConduitPure pipe `shouldBe` 7+sum lst
