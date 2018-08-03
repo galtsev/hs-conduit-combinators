@@ -3,8 +3,13 @@ module Dan.TestCombinators where
 
 import Data.Conduit
 import Data.Conduit.Combinators (sinkList)
+import Data.Functor.Identity (Identity)
 import qualified Data.Conduit.Combinators as CC
+import qualified Data.ByteString as BS
 import qualified Dan.Combinators as DC
+import System.IO (Handle, openTempFile, hSeek, hClose, SeekMode(AbsoluteSeek), IOMode(..), withFile)
+import System.Directory (removeFile)
+import System.Random (randomRIO)
 import Control.Monad.Trans.Reader
 import Control.Monad.Trans.State
 import Test.Hspec
@@ -84,3 +89,44 @@ tests = hspec $ do
             let
                 pipe = DC.replicateM 3 ask .| sinkList
             runReader (runConduit pipe) 7 `shouldBe` [7, 7, 7]
+
+        it "sourceHandle with seek" $ 
+            let
+                fSize = 48*1024
+                pipe h = DC.sourceHandle h .| CC.foldl (\acc b->acc+BS.length b) 0
+                withTempFile :: BS.ByteString -> (Handle -> IO a) -> IO a
+                withTempFile content g = do
+                    (fp, h) <- openTempFile "/tmp" "hspec.dat"
+                    BS.hPut h content
+                    hSeek h AbsoluteSeek 0
+                    res <- g h
+                    hClose h
+                    removeFile fp
+                    return res
+                proc = withTempFile (BS.replicate fSize 1) $ runConduit . pipe
+            in 
+                proc >>= flip shouldBe fSize
+
+        it "sourceHandle with reopen" $
+            let
+                fSize = 16*1024*5 -- 2 and half of full 32k chunk
+                pipe h = DC.sourceHandle h .| CC.foldl (\acc b->acc+BS.length b) 0
+                withTempFile :: BS.ByteString -> (Handle -> IO a) -> IO a
+                withTempFile content g = do
+                    fn <- randomRIO (10000::Int, 99999)
+                    let fp = "/tmp/" ++ show fn ++ ".dat"
+                    BS.writeFile fp content
+                    withFile fp ReadMode g <* removeFile fp
+                proc = withTempFile (BS.replicate fSize 1) $ runConduit . pipe
+            in 
+                proc >>= flip shouldBe fSize
+
+    describe "Consumers - pure" $ do
+        it "drop" $
+            let
+                n = 17
+                d = 6
+                pipe :: ConduitT () Void Identity [Int]
+                pipe = CC.yieldMany [1..n] .| (DC.drop d >> sinkList)
+            in
+                runConduitPure pipe `shouldBe` [d+1..n]

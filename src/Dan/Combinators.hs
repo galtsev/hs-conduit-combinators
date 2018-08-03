@@ -1,8 +1,13 @@
 module Dan.Combinators where
 
+
 import Prelude hiding (enumFromTo, repeat, iterate)
-import Control.Monad.Trans.Class (MonadTrans (lift))
 import Data.Conduit
+import Control.Monad.Trans.Class (MonadTrans (lift))
+import Control.Monad.IO.Class (MonadIO, liftIO)
+import System.IO (Handle, hIsEOF)
+import Data.ByteString (ByteString, hGet)
+import qualified Data.ByteString as BS
 
 yieldMany :: (Monad m, Foldable t) => t a -> ConduitT i a m ()
 yieldMany t = mapM_ yield t
@@ -65,3 +70,34 @@ replicateM n m = go n
             yield a
             go (nx - 1)
 
+-- IO
+
+-- sourceFile :: MonadResource m => FilePath -> ConduitT i ByteString m ()
+
+sz :: Int
+sz = 32 * 1024
+
+sourceHandle :: MonadIO m => Handle -> ConduitT i ByteString m ()
+sourceHandle h = go
+    where
+        go = do
+            eof <- liftIO $ hIsEOF h
+            if eof
+                then return ()
+                else do
+                    buf <- liftIO $ hGet h sz
+                    yield buf
+                    go
+
+-- Consumers
+-- pure
+
+drop :: Monad m => Int -> ConduitT i o m ()
+drop n = go n
+    where
+        go 0 = return ()
+        go x = do
+            v <- await
+            case v of
+                Nothing -> return ()
+                Just _ -> go (x-1)

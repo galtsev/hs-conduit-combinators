@@ -24,6 +24,9 @@ dependencies:
 - conduit
 - hspec
 - transformers
+- bytestring
+- directory
+- random
 
 library:
   source-dirs: src
